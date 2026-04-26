@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TP3 - SNL | Méthode du Premier Harmonique</title>
+    
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    
+    <style>
+        /* =========================================================================
+        EXPLICATION DE L'ARCHITECTURE CSS ET DU THÈME "DEEP SPACE"
+        =========================================================================
+        Le CSS est structuré autour de variables globales (:root). Cela permet
+        de maintenir une cohérence chromatique stricte. Le thème "Deep Space"
+        s'inspire des interfaces cybernétiques et des tableaux de bord spatiaux,
+        utilisant des fonds très sombres contrastés par des accents néons (cyan, 
+        magenta, violet) pour guider le regard de l'utilisateur vers l'information.
+        */
+        :root {
+            /* Couleurs de fond de l'espace profond */
+            --space-dark: #05070d;
+            --space-light: #0b0f19;
+            /* Paramètres du Glassmorphism (effet verre dépoli) */
+            --panel-bg: rgba(13, 17, 28, 0.75);
+            --panel-border: rgba(0, 240, 255, 0.2);
+            --panel-glow: rgba(0, 240, 255, 0.05);
+            /* Couleurs d'accentuation scientifique */
+            --neon-cyan: #00f0ff;
+            --neon-magenta: #ff007f;
+            --neon-purple: #8a2be2;
+            --neon-yellow: #ffea00;
+            /* Typographie */
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --font-main: 'Inter', system-ui, sans-serif;
+            --font-mono: 'Fira Code', 'Consolas', monospace;
+            --grid-color: rgba(255, 255, 255, 0.02);
+            --glass-blur: blur(16px);
+        }
+
+        /* Reset des marges pour éviter les comportements par défaut des navigateurs.
+        Le box-sizing "border-box" assure que le padding ne casse pas la largeur des éléments.
+        */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+
+        /* Le body intègre un fond texturé. La grille est dessinée dynamiquement
+        en utilisant des linear-gradients qui se croisent. Cela donne un aspect 
+        "papier millimétré de l'espace" très adapté à un contexte ingénieur.
+        */
+        body {
+            background-color: var(--space-dark);
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Génération d'une nébuleuse d'arrière-plan via un pseudo-élément.
+        Ces gradients radiaux flottent derrière l'interface pour casser
+        la monotonie du fond noir sans distraire la lecture.
+        */
+        body::before {
+            content: ''; position: fixed; top: -20%; left: -10%; width: 120%; height: 120%;
+            background: radial-gradient(circle at 20% 30%, rgba(138, 43, 226, 0.08), transparent 40%),
+                        radial-gradient(circle at 80% 80%, rgba(0, 240, 255, 0.05), transparent 40%);
+            z-index: -1; pointer-events: none;
+        }
+
+        /* Système de grille CSS pour un layout responsive */
+        .dashboard { max-width: 1600px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: repeat(12, 1fr); gap: 2rem; }
+        .col-12 { grid-column: span 12; }
+        .col-6 { grid-column: span 6; }
+        @media (max-width: 1024px) { .col-6 { grid-column: span 12; } }
+
+        /* =========================================================================
+        STYLE DES PANNEAUX (GLASSMORPHISM)
+        =========================================================================
+        Le Glassmorphism est obtenu grâce à la propriété 'backdrop-filter: blur()'.
+        Cela floute l'arrière-plan situé derrière la div, donnant l'illusion d'une
+        plaque de verre acrylique. Combiné avec une bordure semi-transparente, 
+        le rendu est ultra-moderne.
+        */
+        .panel {
+            background: var(--panel-bg); border: 1px solid var(--panel-border);
+            border-radius: 16px; padding: 2rem; backdrop-filter: var(--glass-blur);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5); transition: all 0.3s ease; position: relative;
+        }
+        .panel:hover { border-color: rgba(0, 240, 255, 0.5); box-shadow: 0 15px 40px var(--panel-glow); transform: translateY(-2px); }
+        .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 1rem; }
+        .panel-title { font-size: 1.4rem; font-weight: 700; color: var(--neon-cyan); text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 10px; }
+        .panel-title::before { content: '/>'; color: var(--neon-magenta); font-family: var(--font-mono); }
+
+        /* Typographie et Blocs Mathématiques */
+        .title-glitch { text-align: center; font-size: 3rem; font-weight: 900; background: linear-gradient(to right, var(--neon-cyan), var(--neon-purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin: 2rem 0 0.5rem; }
+        .subtitle { text-align: center; font-size: 1.2rem; color: var(--text-secondary); font-family: var(--font-mono); margin-bottom: 2rem; grid-column: span 12; }
+        p { margin-bottom: 1rem; color: #cbd5e1; text-align: justify; }
+        .highlight { color: var(--neon-cyan); font-weight: 600; }
+        .danger { color: var(--neon-magenta); font-weight: 600; }
+
+        .math-block {
+            background: rgba(0, 0, 0, 0.6); border-left: 4px solid var(--neon-purple);
+            padding: 1.2rem; margin: 1.5rem 0; border-radius: 0 8px 8px 0; font-family: var(--font-mono);
+            font-size: 1.05rem; color: #fff; overflow-x: auto;
+        }
+
+        /* Contrôles Interactifs (Sliders) */
+        .control-board { background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.2rem; }
+        .slider-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .slider-header { display: flex; justify-content: space-between; align-items: center; }
+        .slider-label { font-size: 0.95rem; color: var(--neon-cyan); font-weight: 600; }
+        .slider-value { background: rgba(0, 240, 255, 0.1); border: 1px solid var(--neon-cyan); padding: 0.2rem 0.6rem; border-radius: 4px; font-family: var(--font-mono); color: #fff; }
+        
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
+        input[type=range]::-webkit-slider-thumb { height: 18px; width: 18px; border-radius: 50%; background: var(--neon-purple); cursor: pointer; -webkit-appearance: none; margin-top: -6px; transition: 0.2s; }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); background: var(--neon-magenta); box-shadow: 0 0 10px var(--neon-magenta); }
+
+        .btn-cyber { background: linear-gradient(45deg, rgba(138,43,226,0.2), rgba(0,240,255,0.2)); border: 1px solid var(--neon-cyan); color: #fff; padding: 1rem; font-family: var(--font-mono); font-weight: bold; text-transform: uppercase; letter-spacing: 1px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; width: 100%; margin-top: 1rem; }
+        .btn-cyber:hover { background: linear-gradient(45deg, rgba(138,43,226,0.4), rgba(0,240,255,0.4)); box-shadow: 0 0 15px rgba(0, 240, 255, 0.3); transform: translateY(-2px); }
+
+        .plot-container { width: 100%; height: 450px; background: #030508; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05); margin-top: 1rem; }
+
+        /* Coloration syntaxique pour le bloc de code MATLAB */
+        pre { background: #010204; padding: 1.5rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); overflow-x: auto; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; color: #a6accd; }
+        .tk-comment { color: #6272a4; font-style: italic; } .tk-keyword { color: #ff79c6; } .tk-string { color: #f1fa8c; } .tk-function { color: #50fa7b; } .tk-number { color: #bd93f9; }
+
+        .signature { text-align: center; padding: 3rem 0; margin-top: 2rem; border-top: 1px solid rgba(255,255,255,0.05); font-family: var(--font-mono); color: var(--neon-purple); letter-spacing: 2px; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <div class="col-12">
+        <h1 class="title-glitch">MÉTHODE DU PREMIER HARMONIQUE</h1>
+        <div class="subtitle">TP N°3 - Saturation & Cycle Limite (Systèmes Non Linéaires)</div>
+    </div>
+
+    <section class="panel col-12">
+        <div class="panel-header"><h2 class="panel-title">1. Analyse Théorique & Calculs (Q1, Q10, Q11)</h2></div>
+        
+        <div class="dashboard" style="padding:0; gap:2rem;">
+            <div class="col-6">
+                <p><strong>Gain Équivalent (Fonction Descriptive) :</strong> La méthode du premier harmonique postule que si un système linéaire agit comme un filtre passe-bas, il filtre les harmoniques supérieures créées par la non-linéarité. La non-linéarité est ici une saturation (seuil <span class="highlight">h = 1.5</span>, gain <span class="highlight">k = 2</span>). La limite linéaire est <span class="highlight">es = h/k = 0.75</span>.</p>
+                <div class="math-block">
+                    Si a ≤ 0.75 : N(a) = k = 2 (Comportement linéaire)<br>
+                    Si a > 0.75 : N(a) = (4/π) * [ arcsin(0.75/a) + (0.75/a)*√(1 - (0.75/a)²) ]
+                </div>
+                
+                <p><strong>Calcul de la Pulsation Critique (ωc) :</strong> La fonction de transfert du système linéaire (donnée dans le TP) est :</p>
+                <div class="math-block">
+                    H(s) = 5 / (0.001 s³ + 0.03 s² + 0.3 s + 1)<br>
+                    H(jω) = 5 / [ (1 - 0.03ω²) + j(0.3ω - 0.001ω³) ]
+                </div>
+            </div>
+            <div class="col-6">
+                <p>L'intersection du lieu de Nyquist avec l'axe réel négatif (nécessaire pour la condition d'auto-oscillation de Barkhausen) se produit lorsque la partie imaginaire s'annule :</p>
+                <div class="math-block" style="border-left-color: var(--neon-cyan);">
+                    Im(H) = 0  =>  0.3ω - 0.001ω³ = 0<br>
+                    ω² = 300   =>  <span class="danger">ωc = √300 ≈ 17.32 rad/s</span>
+                </div>
+                <p><strong>Calcul de l'Amplitude du Cycle Limite (ac) :</strong> En remplaçant ωc dans la partie réelle, on trouve le point exact où le système coupe l'axe réel :</p>
+                <div class="math-block" style="border-left-color: var(--neon-cyan);">
+                    Re(H(jωc)) = 5 / (1 - 0.03*300) = 5 / (1 - 9) = -0.625<br>
+                    Condition du cycle limite : H(jωc) = -1 / N(ac)<br>
+                    -1 / N(ac) = -0.625  =>  <span class="danger">N(ac) = 1.6</span>
+                </div>
+                <p>En résolvant l'équation transcendante N(ac) = 1.6 numériquement, on trouve <span class="highlight">ac ≈ 1.08</span>. C'est l'amplitude théorique des oscillations que nous allons vérifier par la simulation RK4.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel col-6">
+        <div class="panel-header"><h2 class="panel-title">2. Plan Complexe : Nyquist & Lieu Critique</h2></div>
+        <p>Le tracé bleu représente la réponse fréquentielle du système linéaire <strong>H(jω)</strong>. La courbe pointillée rouge représente l'inverse changé de signe du gain équivalent <strong>-1/N(a)</strong>. Le point de croisement confirme mathématiquement l'existence d'un cycle limite.</p>
+        <div id="plot-nyquist" class="plot-container"></div>
+    </section>
+
+    <section class="panel col-6">
+        <div class="panel-header"><h2 class="panel-title">3. Simulateur Dynamique (RK4) - Q4, Q5, Q6</h2></div>
+        <p>Ce module résout en temps réel les équations différentielles d'état du système bouclé. Modifiez les états initiaux ci-dessous. Vous observerez que, peu importe le point de départ, la trajectoire est "attirée" vers le cycle limite (orbite fermée isolée) calculé théoriquement à <strong>a ≈ 1.08</strong>.</p>
+        
+        <div class="control-board">
+            <div class="slider-group">
+                <div class="slider-header"><span class="slider-label">État x₁(0) [Position initiale]</span><span class="slider-value" id="val-x1">0.10</span></div>
+                <input type="range" id="param-x1" min="-2" max="2" step="0.1" value="0.1">
+            </div>
+            <div class="slider-group">
+                <div class="slider-header"><span class="slider-label">État x₂(0) [Vitesse initiale]</span><span class="slider-value" id="val-x2">0.00</span></div>
+                <input type="range" id="param-x2" min="-50" max="50" step="1" value="0">
+            </div>
+            <div class="slider-group">
+                <div class="slider-header"><span class="slider-label">État x₃(0) [Accélération initiale]</span><span class="slider-value" id="val-x3">0.00</span></div>
+                <input type="range" id="param-x3" min="-1000" max="1000" step="50" value="0">
+            </div>
+            <button id="btn-sim" class="btn-cyber">Simuler le Système d'Ordre 3</button>
+        </div>
+    </section>
+
+    <section class="panel col-12">
+        <div class="panel-header"><h2 class="panel-title">4. Évolution Temporelle x₁(t) & Plan de Phase (x₁ vs x₂)</h2></div>
+        <div class="dashboard" style="padding:0; gap:1rem;">
+            <div class="col-6"><div id="plot-time" class="plot-container"></div></div>
+            <div class="col-6"><div id="plot-phase" class="plot-container"></div></div>
+        </div>
+    </section>
+
+    <section class="panel col-12">
+        <div class="panel-header"><h2 class="panel-title">5. Implémentation MATLAB Commentée pour le TP</h2></div>
+<pre><code><span class="tk-comment">% =========================================================================</span>
+<span class="tk-comment">% MODULE: Systèmes Non Linéaires (U.S.T.H.B) - TP N°3</span>
+<span class="tk-comment">% OBJET : Illustration de la méthode du premier harmonique avec </span>
+<span class="tk-comment">%         une non-linéarité de type Saturation.</span>
+<span class="tk-comment">% =========================================================================</span>
+
+<span class="tk-keyword">function</span> tp3_snl_resolution_complete()
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    <span class="tk-comment">% Q1: Définition des paramètres physiques de la saturation.</span>
+    <span class="tk-comment">% Le gain linéaire 'k' est la pente à l'origine.</span>
+    <span class="tk-comment">% La limite 'h' est la valeur maximale en sortie.</span>
+    <span class="tk-comment">% 'es' représente l'entrée seuil à partir de laquelle le système sature.</span>
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    h = <span class="tk-number">1.5</span>; 
+    k = <span class="tk-number">2</span>; 
+    es = h/k; <span class="tk-comment">% es = 0.75</span>
+    
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    <span class="tk-comment">% Q2: Représentation du gain équivalent N(a)</span>
+    <span class="tk-comment">% L'amplitude 'a' balaie l'intervalle [0, 25] avec un pas de 0.1.</span>
+    <span class="tk-comment">% On utilise arrayfun pour appliquer notre fonction personnalisée </span>
+    <span class="tk-comment">% eval_Na à chaque élément du vecteur de manière vectorisée.</span>
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    a_vec = <span class="tk-number">0</span>:<span class="tk-number">0.1</span>:<span class="tk-number">25</span>;
+    Na_vec = arrayfun(@(a) eval_Na(a, k, es), a_vec);
+    
+    figure(<span class="tk-string">'Name'</span>, <span class="tk-string">'Gain Equivalent'</span>);
+    <span class="tk-function">plot</span>(a_vec, Na_vec, <span class="tk-string">'LineWidth'</span>, <span class="tk-number">2</span>); grid <span class="tk-string">on</span>;
+    title(<span class="tk-string">'Q2: Gain équivalent N(a) pour la Saturation'</span>); 
+    xlabel(<span class="tk-string">'Amplitude de l''oscillation (a)'</span>); ylabel(<span class="tk-string">'N(a)'</span>);
+
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    <span class="tk-comment">% Q3 & Q4: Intégration des équations différentielles (Système Bouclé)</span>
+    <span class="tk-comment">% Le système est donné sous forme d'état: dx/dt = Ax + Bu.</span>
+    <span class="tk-comment">% L'entrée 'u' est la sortie de la non-linéarité avec un signe négatif </span>
+    <span class="tk-comment">% dû à la boucle de contre-réaction : u = -sat(x1).</span>
+    <span class="tk-comment">% On utilise ode45, basé sur la méthode de Runge-Kutta explicite (4,5),</span>
+    <span class="tk-comment">% qui gère automatiquement le pas d'intégration pour limiter l'erreur.</span>
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    tspan = [<span class="tk-number">0</span> <span class="tk-number">20</span>]; <span class="tk-comment">% Intervalle d'intégration temporel t ∈ [0, 20]</span>
+    x0 = [<span class="tk-number">0.1</span>; <span class="tk-number">0</span>; <span class="tk-number">0</span>]; <span class="tk-comment">% Condition initiale de l'état du système</span>
+    
+    <span class="tk-comment">% Définition matricielle dans une fonction anonyme</span>
+    sys_cl = @(t, x) [
+        x(<span class="tk-number">2</span>);
+        x(<span class="tk-number">3</span>);
+        -<span class="tk-number">1000</span>*x(<span class="tk-number">1</span>) - <span class="tk-number">300</span>*x(<span class="tk-number">2</span>) - <span class="tk-number">30</span>*x(<span class="tk-number">3</span>) + <span class="tk-number">5000</span>*(-sat_func(x(<span class="tk-number">1</span>), k, h))
+    ];
+
+    [t, x_out] = <span class="tk-function">ode45</span>(sys_cl, tspan, x0);
+
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    <span class="tk-comment">% Q5 & Q6: Tracé de la sortie temporelle x1(t)</span>
+    <span class="tk-comment">% Remarque: On observe un régime transitoire suivi de l'établissement </span>
+    <span class="tk-comment">% d'un régime oscillatoire permanent. C'est le Cycle Limite.</span>
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    figure(<span class="tk-string">'Name'</span>, <span class="tk-string">'Simulation Temporelle'</span>);
+    <span class="tk-function">plot</span>(t, x_out(:,<span class="tk-number">1</span>), <span class="tk-string">'LineWidth'</span>, <span class="tk-number">1.5</span>); grid <span class="tk-string">on</span>;
+    title(<span class="tk-string">'Q5: Évolution de la sortie du système x_1(t)'</span>); 
+    xlabel(<span class="tk-string">'Temps (secondes)'</span>); ylabel(<span class="tk-string">'Amplitude x_1(t)'</span>);
+
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    <span class="tk-comment">% Q7 & Q8: Diagramme de Nyquist et Lieu Critique dans le Plan Complexe</span>
+    <span class="tk-comment">% H(s) est la fonction de transfert de la partie linéaire. On évalue</span>
+    <span class="tk-comment">% H(jw) en substituant s par jw. </span>
+    <span class="tk-comment">% Le lieu critique correspond à l'inverse négatif du gain équivalent.</span>
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    w = linspace(<span class="tk-number">0</span>, <span class="tk-number">100</span>, <span class="tk-number">10000</span>);
+    s = <span class="tk-number">1i</span> * w;
+    H_jw = <span class="tk-number">5</span> ./ (<span class="tk-number">0.001</span>*s.^<span class="tk-number">3</span> + <span class="tk-number">0.03</span>*s.^<span class="tk-number">2</span> + <span class="tk-number">0.3</span>*s + <span class="tk-number">1</span>);
+
+    figure(<span class="tk-string">'Name'</span>, <span class="tk-string">'Plan Complexe de Nyquist'</span>);
+    <span class="tk-function">plot</span>(real(H_jw), imag(H_jw), <span class="tk-string">'b'</span>, <span class="tk-string">'LineWidth'</span>, <span class="tk-number">1.5</span>); hold <span class="tk-string">on</span>; grid <span class="tk-string">on</span>;
+    
+    <span class="tk-comment">% Tracé du lieu -1/N(a). Il se situe entièrement sur l'axe réel négatif </span>
+    <span class="tk-comment">% car la saturation est une non-linéarité univoque (sans mémoire).</span>
+    lieu_critique = -<span class="tk-number">1</span> ./ Na_vec;
+    <span class="tk-function">plot</span>(lieu_critique, zeros(size(lieu_critique)), <span class="tk-string">'r--'</span>, <span class="tk-string">'LineWidth'</span>, <span class="tk-number">2</span>);
+    title(<span class="tk-string">'Q7-Q8: Intersection de Nyquist et du Lieu Critique'</span>);
+    legend(<span class="tk-string">'H(j\omega)'</span>, <span class="tk-string">'-1/N(a)'</span>);
+    axis([-<span class="tk-number">1</span> <span class="tk-number">0.2</span> -<span class="tk-number">3</span> <span class="tk-number">1</span>]);
+
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    <span class="tk-comment">% Q9, Q10, Q11: Calcul du point d'intersection exact (Cycle Limite)</span>
+    <span class="tk-comment">% Le point de croisement vérifie l'équation de l'auto-oscillation.</span>
+    <span class="tk-comment">% L'équation transcendante N(a_c) = 1.6 est résolue numériquement avec</span>
+    <span class="tk-comment">% la fonction MATLAB 'fzero', qui cherche la racine d'une fonction.</span>
+    <span class="tk-comment">% ---------------------------------------------------------------------</span>
+    f_opt = @(a) eval_Na(a, k, es) - <span class="tk-number">1.6</span>;
+    ac_num = fzero(f_opt, <span class="tk-number">1</span>); <span class="tk-comment">% On donne 1 comme point de départ (guess)</span>
+    fprintf(<span class="tk-string">'Amplitude théorique du cycle limite ac = %.4f\n'</span>, ac_num);
+<span class="tk-keyword">end</span>
+
+<span class="tk-comment">% =========================================================================</span>
+<span class="tk-comment">% SOUS-FONCTIONS AUXILIAIRES</span>
+<span class="tk-comment">% =========================================================================</span>
+
+<span class="tk-comment">% Évaluation mathématique du gain équivalent N(a) pour une saturation pure</span>
+<span class="tk-keyword">function</span> N = eval_Na(a, k, es)
+    <span class="tk-keyword">if</span> a <= es
+        <span class="tk-comment">% Zone totalement linéaire, le gain est constant</span>
+        N = k;
+    <span class="tk-keyword">else</span>
+        <span class="tk-comment">% Application de la formule intégrale de Fourier (fondamental)</span>
+        alpha = es / a;
+        N = (<span class="tk-number">4</span>*k/pi) * (asin(alpha) + alpha * sqrt(<span class="tk-number">1</span> - alpha^<span class="tk-number">2</span>)) / <span class="tk-number">2</span>; 
+    <span class="tk-keyword">end</span>
+<span class="tk-keyword">end</span>
+
+<span class="tk-comment">% Modélisation physique du bloc de saturation</span>
+<span class="tk-keyword">function</span> y = sat_func(x, k, h)
+    <span class="tk-keyword">if</span> x > h/k
+        y = h;       <span class="tk-comment">% Écrêtage positif</span>
+    <span class="tk-keyword">elseif</span> x < -h/k
+        y = -h;      <span class="tk-comment">% Écrêtage négatif</span>
+    <span class="tk-keyword">else</span>
+        y = k * x;   <span class="tk-comment">% Régime linéaire proportionnel</span>
+    <span class="tk-keyword">end</span>
+<span class="tk-keyword">end</span>
+</code></pre>
+    </section>
+
+    <div class="signature col-12">created by DAHANE AHMED LAMINE</div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        
+        /**
+         * ------------------------------------------------------------------------
+         * 1. CONFIGURATION GLOBALE DU RENDU GRAPHIQUE (PLOTLY)
+         * ------------------------------------------------------------------------
+         * Nous définissons un "layout" de base pour garantir que tous nos graphes
+         * respectent l'esthétique du thème sombre (Deep Space). Les grilles
+         * sont semi-transparentes pour ne pas polluer la lecture des courbes.
+         */
+        const layoutBase = {
+            paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+            margin: { t: 40, r: 20, l: 50, b: 50 },
+            font: { color: '#94a3b8', family: 'Inter' },
+            xaxis: { gridcolor: 'rgba(255,255,255,0.05)', zerolinecolor: 'rgba(255,255,255,0.2)' },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.05)', zerolinecolor: 'rgba(255,255,255,0.2)' },
+            showlegend: true, legend: { bgcolor: 'rgba(0,0,0,0.5)' }
+        };
+
+        /**
+         * ------------------------------------------------------------------------
+         * 2. GÉNÉRATION DU DIAGRAMME DE NYQUIST
+         * ------------------------------------------------------------------------
+         * Cette fonction calcule les vecteurs de nombres complexes nécessaires
+         * pour dessiner la courbe de réponse fréquentielle de H(s).
+         * Elle sépare la partie réelle et imaginaire manuellement.
+         */
+        function drawNyquist() {
+            let w_vals = [], re_H = [], im_H = [];
+            // Balayage fréquentiel de w=0 à w=100
+            for(let w=0; w<=100; w+=0.5) {
+                // Fonction: H(jw) = 5 / ((1 - 0.03*w^2) + j(0.3*w - 0.001*w^3))
+                let r_den = 1 - 0.03 * w*w;                       // Partie réelle du dénominateur
+                let i_den = 0.3 * w - 0.001 * Math.pow(w, 3);     // Partie imaginaire du dénominateur
+                let mag2 = r_den*r_den + i_den*i_den;             // Module au carré pour conjugué
+                
+                re_H.push( 5 * r_den / mag2 );
+                im_H.push( -5 * i_den / mag2 );
+            }
+
+            // Calcul du lieu critique (-1 / Gain Equivalent)
+            let a_vals = [], crit_locus = [];
+            for(let a=0.75; a<=25; a+=0.5) {
+                let alpha = 0.75 / a;
+                let Na = (4/Math.PI) * (Math.asin(alpha) + alpha * Math.sqrt(1 - alpha*alpha));
+                crit_locus.push(-1 / Na);
+            }
+
+            // Définition des "Traces" Plotly (les différentes couches du graphique)
+            const traceNyquist = { x: re_H, y: im_H, mode: 'lines', name: 'Nyquist H(jω)', line: {color: '#00f0ff', width: 2} };
+            const traceCrit = { x: crit_locus, y: Array(crit_locus.length).fill(0), mode: 'lines', name: 'Lieu -1/N(a)', line: {color: '#ff007f', width: 3, dash: 'dash'} };
+            
+            // Marquage de l'intersection mathématique trouvée à Re = -0.625
+            const traceInt = { x: [-0.625], y: [0], mode: 'markers', name: 'Intersection ωc', marker: {color: '#ffea00', size: 10, symbol: 'star'} };
+
+            let layoutNyq = JSON.parse(JSON.stringify(layoutBase));
+            layoutNyq.xaxis.title = 'Réel'; layoutNyq.yaxis.title = 'Imaginaire';
+            layoutNyq.xaxis.range = [-1.2, 0.2]; layoutNyq.yaxis.range = [-1.5, 1.5];
+
+            Plotly.newPlot('plot-nyquist', [traceNyquist, traceCrit, traceInt], layoutNyq, {displayModeBar: false});
+        }
+
+        /**
+         * ------------------------------------------------------------------------
+         * 3. MOTEUR D'INTÉGRATION NUMÉRIQUE RUNGE-KUTTA (RK4)
+         * ------------------------------------------------------------------------
+         * C'est le coeur du simulateur interactif. Contrairement à Euler qui 
+         * avance linéairement, RK4 évalue 4 pentes (k1, k2, k3, k4) à l'intérieur
+         * du même intervalle de temps (dt) pour obtenir une précision extrême, 
+         * indispensable pour simuler des systèmes d'ordre 3 avec saturation.
+         */
+         
+        // Implémentation JavaScript de la fonction de saturation (seuil 1.5, pente 2)
+        const sat = (x) => {
+            if (x > 0.75) return 1.5;
+            if (x < -0.75) return -1.5;
+            return 2 * x;
+        };
+
+        // Algorithme principal RK4
+        function simulateSystem(x1_0, x2_0, x3_0) {
+            const dt = 0.005; // Pas d'intégration ultra-fin pour garantir la stabilité de l'approximation
+            const t_max = 20; // Durée totale de la simulation (en secondes)
+            let t = 0, x1 = x1_0, x2 = x2_0, x3 = x3_0;
+            let res = { t: [], x1: [], x2: [] };
+
+            // Définition des dérivées d'état (la matrice A et le vecteur B)
+            const f1 = (x1,x2,x3) => x2;
+            const f2 = (x1,x2,x3) => x3;
+            // f3 intègre la boucle de retour : u = -sat(x1)
+            const f3 = (x1,x2,x3) => -1000*x1 - 300*x2 - 30*x3 - 5000*sat(x1);
+
+            while(t <= t_max) {
+                // Sous-échantillonnage pour éviter de geler le navigateur avec Plotly
+                // On enregistre un point que toutes les 0.02 secondes.
+                if (Math.abs(t % 0.02) < dt) { res.t.push(t); res.x1.push(x1); res.x2.push(x2); }
+
+                // Étape 1 : Pente au début de l'intervalle
+                let k1_1 = f1(x1,x2,x3), k1_2 = f2(x1,x2,x3), k1_3 = f3(x1,x2,x3);
+                
+                // Étape 2 : Pente au milieu de l'intervalle (estimation 1)
+                let k2_1 = f1(x1+k1_1*dt/2, x2+k1_2*dt/2, x3+k1_3*dt/2), 
+                    k2_2 = f2(x1+k1_1*dt/2, x2+k1_2*dt/2, x3+k1_3*dt/2), 
+                    k2_3 = f3(x1+k1_1*dt/2, x2+k1_2*dt/2, x3+k1_3*dt/2);
+                
+                // Étape 3 : Pente au milieu de l'intervalle (estimation 2)
+                let k3_1 = f1(x1+k2_1*dt/2, x2+k2_2*dt/2, x3+k2_3*dt/2), 
+                    k3_2 = f2(x1+k2_1*dt/2, x2+k2_2*dt/2, x3+k2_3*dt/2), 
+                    k3_3 = f3(x1+k2_1*dt/2, x2+k2_2*dt/2, x3+k2_3*dt/2);
+                
+                // Étape 4 : Pente à la fin de l'intervalle
+                let k4_1 = f1(x1+k3_1*dt, x2+k3_2*dt, x3+k3_3*dt), 
+                    k4_2 = f2(x1+k3_1*dt, x2+k3_2*dt, x3+k3_3*dt), 
+                    k4_3 = f3(x1+k3_1*dt, x2+k3_2*dt, x3+k3_3*dt);
+
+                // Mise à jour de l'état du système par moyenne pondérée des pentes
+                x1 += (dt/6)*(k1_1 + 2*k2_1 + 2*k3_1 + k4_1);
+                x2 += (dt/6)*(k1_2 + 2*k2_2 + 2*k3_2 + k4_2);
+                x3 += (dt/6)*(k1_3 + 2*k2_3 + 2*k3_3 + k4_3);
+                
+                t += dt; // Avancement de l'horloge interne
+            }
+            return res;
+        }
+
+        /**
+         * ------------------------------------------------------------------------
+         * 4. GESTION DE L'INTERFACE UTILISATEUR (UI EVENTS)
+         * ------------------------------------------------------------------------
+         * Cette fonction orchestre la récupération des données des curseurs,
+         * l'appel au solveur RK4, et le redessin des deux graphiques de sortie.
+         */
+        function runSim() {
+            // Lecture des valeurs de l'utilisateur
+            let x1_0 = parseFloat(document.getElementById('param-x1').value);
+            let x2_0 = parseFloat(document.getElementById('param-x2').value);
+            let x3_0 = parseFloat(document.getElementById('param-x3').value);
+
+            // Appel au moteur physique RK4
+            let data = simulateSystem(x1_0, x2_0, x3_0);
+
+            // Tracé Temporel (Axe X = Temps, Axe Y = Amplitude)
+            let layoutTime = JSON.parse(JSON.stringify(layoutBase));
+            layoutTime.xaxis.title = 'Temps (s)'; layoutTime.yaxis.title = 'Sortie x₁(t)';
+            Plotly.newPlot('plot-time', [{ x: data.t, y: data.x1, mode: 'lines', name: 'x₁(t)', line: {color: '#8a2be2'} }], layoutTime, {displayModeBar: false});
+
+            // Tracé dans le Plan de Phase (Axe X = Position, Axe Y = Vitesse)
+            let layoutPhase = JSON.parse(JSON.stringify(layoutBase));
+            layoutPhase.xaxis.title = 'État x₁ (Position)'; layoutPhase.yaxis.title = 'État x₂ (Vitesse)';
+            Plotly.newPlot('plot-phase', [{ x: data.x1, y: data.x2, mode: 'lines', name: 'Trajectoire', line: {color: '#00f0ff'} }], layoutPhase, {displayModeBar: false});
+        }
+
+        // --- LIAISON DES ÉVÉNEMENTS (Event Listeners) ---
+        
+        // Mise à jour en temps réel de l'affichage textuel à côté des curseurs
+        document.querySelectorAll('input[type="range"]').forEach(el => {
+            el.addEventListener('input', (e) => {
+                document.getElementById('val-' + e.target.id.split('-')[1]).innerText = parseFloat(e.target.value).toFixed(2);
+            });
+        });
+
+        // Déclenchement de la simulation au clic sur le bouton "Cyber"
+        document.getElementById('btn-sim').addEventListener('click', runSim);
+
+        // --- INITIALISATION AU CHARGEMENT DE LA PAGE ---
+        drawNyquist();
+        runSim();
+    });
+</script>
+
+</body>
+</html>
